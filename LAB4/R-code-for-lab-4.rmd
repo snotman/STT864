@@ -1,0 +1,293 @@
+---
+title: "Stt864 Lab4"
+author: "Nan Cao"
+date: "April 27, 2016"
+output: pdf_document
+---
+
+Data preparing
+```{r}
+setwd("C://Users//nan66//Google Drive//stt864//LAB4")
+load(file="Alldata.Rdata")
+set.seed(52871775)
+library(nlme)
+library(lme4)
+library(MASS)
+library(glmmML)
+```
+```{r,echo=FALSE}
+load(file="GOTermlist.RData")
+load(file="pvalset.Rdata")
+load(file="pvalset2.Rdata")
+```
+  
+Q1
+```{r}
+Goterms<-Alldata$originaldata[,128:130]
+mc<-dim(Goterms)[1]
+```
+```{r,eval = FALSE}
+GOTermlist<-NULL
+for (j in 1:mc)
+{
+ 	list<-NULL
+ 	for (k in 1:3)
+	     {
+		GOTerm22283<-as.character(Goterms[j,k])
+		getGoTerms<-unlist(strsplit(GOTerm22283,"///"))
+		repj<-rep(j,length(getGoTerms))	
+		newlist<-cbind(repj,getGoTerms)
+		list<-rbind(list,newlist)	
+	     }
+ 	GOTermlist<-rbind(GOTermlist,list)	
+}	
+```
+
+```{r}
+GO0006955<-which(GOTermlist[,2]=="GO:0006955")
+rownums<-as.numeric(GOTermlist[GO0006955,1])
+subsetGenes<-Alldata$originaldata[rownums,c(3:110)]
+write.table(subsetGenes,file="subsetGenes.txt")
+```
+  
+Q2
+```{r}
+samIDs<-names(subsetGenes)
+Beverages<-((samIDs%in%Alldata$trt1)*1
+           +(samIDs%in%Alldata$trt2)*2
+           +(samIDs%in%Alldata$trt3)*3
+           +(samIDs%in%Alldata$trt4)*4)
+Subject<-((samIDs%in%Alldata$ind1)*1
+         +(samIDs%in%Alldata$ind2)*2
+         +(samIDs%in%Alldata$ind3)*3
+         +(samIDs%in%Alldata$ind4)*4
+         +(samIDs%in%Alldata$ind5)*5
+         +(samIDs%in%Alldata$ind6)*6)
+hours<-((samIDs%in%Alldata$time_h0)*0
+       +(samIDs%in%Alldata$time_h1)*1
+       +(samIDs%in%Alldata$time_h2)*2
+       +(samIDs%in%Alldata$time_h4)*4
+       +(samIDs%in%Alldata$time_h12)*12)
+```
+  
+Q3
+```{r}
+BeverFac<-as.factor(Beverages)
+hourFac<-as.factor(hours)
+resp<-as.numeric(subsetGenes[1,])
+lmmd2<-lmer(resp~BeverFac+(1|Subject)+(1|hours))
+summary(lmmd2)
+```
+
+REML estimates of variances:
+```{r}
+lmreg<-lm(resp~BeverFac+Subject+hours)
+anova(lmreg)
+summary(lmreg)
+sigmahat<-sqrt(0.07058)
+sigmahat
+sigmahat_Subject<-(0.15870-0.07058)/1
+sigmahat_Subject
+sigmahat_hours<-(0.34036-0.07058)/1
+sigmahat_hours
+```
+$H_0$ : the means are the same; $H_1$ : the means are different.
+Statistical model:
+\begin{equation*}
+Z=\frac{ \hat{\beta_1} - \hat{\beta_2} -1}
+{\sqrt{Var(\hat{\beta_1})+Var(\hat{\beta_2})-2Cov(\hat{\beta_1},\hat{\beta_2})}}\sim Z
+\end{equation*}
+For test the significance of difference between alcohol and water group:
+```{r}
+summary(lmmd2)$coefficients[4,3]
+2*(1-pnorm(abs(summary(lmmd2)$coefficients[4,3])))
+```
+Reject the null hypothesis, the means are significantly different.  
+  
+For test the significance of difference between alcohol and water group:
+```{r}
+Zstat2<-(summary(lmmd2)$coefficients[3,1]
+         -summary(lmmd2)$coefficients[4,1])/sqrt(vcov(lmmd2)[3,3]
+         +vcov(lmmd2)[4,4]-2*vcov(lmmd2)[4,3])
+Zstat2
+pnorm(abs(Zstat2))
+```
+We can't reject the null hypothesis.  
+  
+Q4  
+```{r}
+numgenes<-dim(subsetGenes)[1]
+```
+```{r,eval=FALSE}
+pvalset<-rep(0,numgenes)
+pvalset2<-rep(0,numgenes)
+for (i in 1:numgenes)
+{
+ resp<-as.numeric(subsetGenes[i,])
+ lmmd2<-lmer(resp~BeverFac+(1|Subject)+(1|hours))
+ Zstat<-summary(lmmd2)$coefficients[4,3]
+ Zstat2<-(summary(lmmd2)$coefficients[3,1]
+          -summary(lmmd2)$coefficients[4,1])/sqrt(vcov(lmmd2)[3,3]
+          +vcov(lmmd2)[4,4]-2*vcov(lmmd2)[4,3])
+ pvalset[i]<-2*(1-pnorm(abs(Zstat)))
+ pvalset2[i]<-2*(1-pnorm(abs(Zstat)))
+}
+```
+
+```{r,fig.width = 8, fig.height = 4}
+smallest<-which.min(pvalset)
+smallest
+smallest2<-which.min(pvalset2)
+smallest2
+oldpar <- par(mfrow = c(1, 2))
+hist(pvalset,main="p-value of hypothesis 1")
+hist(pvalset2,main="p-value of hypothesis 2")
+par(oldpar)
+0.05/numgenes
+min(pvalset)
+min(pvalset2)
+```
+Since there's no gene significant for the second hypothesis, there's no gene significant for both hypothesises.
+```{r}
+newresp<-as.numeric(subsetGenes[smallest,])
+lmmd3<-lmer(newresp~BeverFac+(1|Subject)+(1|hours))
+summary(lmmd3)
+newresp2<-as.numeric(subsetGenes[smallest2,])
+lmmd32<-lmer(newresp2~BeverFac+(1|Subject)+(1|hours))
+summary(lmmd32)
+
+```
+Q5
+```{r}
+plot(hours,newresp,type="n",xlab="Hours", ylab="gene expression")
+for (sub in 1:6)
+ for (bever in 1:4)
+{
+points(
+      hours[(Subject==sub)&(Beverages==bever)],
+      newresp[(Subject==sub)&(Beverages==bever)],
+      col=bever,pch=sub
+      )
+lines(
+      hours[(Subject==sub)&(Beverages==bever)],
+      newresp[(Subject==sub)&(Beverages==bever)],
+      col=bever
+      )
+}
+```
+There're obvious changes of gene expression in the first 2 hours, but the change from the 2nd hour to the 12th hour.  
+
+Q6
+```{r}
+resp<-newresp
+hours2<-(hours^2)
+hours3<-(hours^3)
+combfacs<-Subject*10+Beverages
+glscsh<-gls(
+	resp~BeverFac+hours+hours2+hours3,
+	correlation=corCompSymm(form=~1|combfacs),
+	weights=varIdent(form=~1|combfacs),
+	method="REML"
+	)
+summary(glscsh)
+glsarh1<-gls(
+	resp~BeverFac+hours+hours2+hours3,
+	correlation=corAR1(form=~1|combfacs),
+	weights=varIdent(form=~1|combfacs),
+	method="REML"
+	)
+summary(glsarh1)
+glscsM2<-gls(
+	resp~BeverFac+BeverFac*hours+BeverFac*hours2+BeverFac*hours3,
+	correlation=corCompSymm(form=~1|combfacs),
+	method="REML"
+	)
+summary(glscsM2)
+glscshM2<-gls(
+	resp~BeverFac+BeverFac*hours+BeverFac*hours2+BeverFac*hours3,
+	correlation=corCompSymm(form=~1|combfacs),
+	weights=varIdent(form=~1|combfacs),
+	method="REML"
+	)
+summary(glscshM2)
+```
+According to the summary of the fitted model ,the last two model seem better.
+The time is significant only in the last models.  
+
+Q7  
+Define new data set
+```{r}
+Combdata<-cbind(newresp,hours,Subject,Beverages,combfacs)
+unicombfacs<-Combdata[Combdata[,2]==0,5]
+newcombdata<-NULL
+for (i in 1:length(unicombfacs))
+{
+ subcomb<-Combdata[Combdata[,5]==unicombfacs[i],]
+ Yvec<-subcomb[,1]
+ Hvec<-subcomb[,2]
+ Zvec<-((Yvec[Hvec!=0]-Yvec[Hvec==0])>0)+0
+ newcombdata<-rbind(newcombdata,cbind(Zvec,subcomb[Hvec!=0,c(2:5)]))
+}
+
+newcombdata1<-list(
+                   Zvec=newcombdata[,1],
+                   hours=newcombdata[,2],
+                   Subject=newcombdata[,3],
+                   Beverages=newcombdata[,4],
+                   combfacs=newcombdata[,5]
+                   )
+newcombdata1$Beverages<-as.factor(newcombdata1$Beverages)
+newcombdata1$hours<-as.factor(newcombdata1$hours)
+```
+  
+GLMM with the default Laplace approximation
+```{r}
+glmRandomIntcept1<-glmer(
+   newcombdata1$Zvec~newcombdata1$Beverages+newcombdata1$hours
+  +(1|newcombdata1$combfacs),family=binomial
+  )
+summary(glmRandomIntcept1)
+```
+  
+Another way to fit using Laplace approximation  
+```{r}
+glmRandomIntcept2<-glmmML(
+  newcombdata1$Zvec~newcombdata1$Beverages+newcombdata1$hours,
+  family=binomial,cluster=newcombdata1$combfacs)
+summary(glmRandomIntcept2)
+```
+  
+Fit the model using the penalized quasi-likelihood
+```{r}
+newcombdata2<-data.frame(newcombdata1)
+glmRandomIntcept3<-glmmPQL(
+                           Zvec~Beverages+hours,
+                           random=~1|combfacs,family=binomial,
+                           data=newcombdata2
+                           )
+summary(glmRandomIntcept3)
+```
+  
+Fit the model using adaptive Gauss-Hermite qudrature(AGQ)  
+nAGQ: the number of points per axis for evaluating the adaptive Gauss-Hermite approximation to the log-likelihood.  
+```{r,fig.width = 8, fig.height = 6}
+glmRandomIntcept4<- glmer(
+  newcombdata1$Zvec~newcombdata1$Beverages+newcombdata1$hours+(1|newcombdata1$combfacs),
+  nAGQ=8,family=binomial)
+summary(glmRandomIntcept4)
+oldpar <- par(mfrow = c(2, 3))
+plot(residuals(glmRandomIntcept1))
+plot(residuals(glmRandomIntcept3))
+plot(residuals(glmRandomIntcept4))
+qqnorm(residuals(glmRandomIntcept1))
+abline(0,1)
+qqnorm(residuals(glmRandomIntcept3))
+abline(0,1)
+qqnorm(residuals(glmRandomIntcept4))
+abline(0,1)
+par(oldpar)
+```
+Compared among the 3 models, only time effects are signficant in all the models.
+The  penalized quasi-likelihood model abd  model using adaptive Gauss-Hermite qudrature have lower correlation of fixed effects.  
+What's more, we failed to get the residuals of the second model because the infinite value.   
+The first model and the forth model has the same residual plot and qqnorm-plot, they both shows higher normaility compared with the third model.

@@ -1,0 +1,60 @@
+---
+title: "test of lab3"
+author: "test of lab3"
+date: "March 29, 2016"
+output: html_document
+---
+
+
+```{r}
+setwd("C://Users//nan66//Google Drive//stt864//LAB3")
+polls2008<-read.csv(file="2008-polls.csv",header=TRUE)
+polls2012<-read.csv(file="2012-polls.csv",header=TRUE)
+results2008<-read.csv(file="2008-results.csv",header=TRUE)
+
+
+pollers<-c("ARG", "EPICMRA", "InsiderAdvantage", "MaristColl", "MasonDixon", "MuhlenbergColl", 
+           "QuinnipiacU", "Rasmussen", "SienaColl","SuffolkU","SurveyUSA", "UofCincinnati","UofNewHampshire","Zogby")
+subsamplesID2008<-polls2008[,5]%in%pollers
+polls2008sub<-polls2008[subsamplesID2008,]
+subsamplesID2012<-polls2012[,5]%in%pollers
+polls2012sub<-polls2012[subsamplesID2012,]
+
+
+winers2008<-(results2008[,2]-results2008[,3]>0)+0
+StateID2008<-results2008[,1]
+Allresponses<-NULL
+for (sid in 1:51)
+{
+ polls2008substate<-polls2008sub[polls2008sub$State==StateID2008[sid],]
+ pollwiners2008state<-(polls2008substate[,2]-polls2008substate[,3]>0)+0
+ pollwinersIND<-(pollwiners2008state==winers2008[sid])+0
+ Allresponses<-c(Allresponses,pollwinersIND)
+}
+margins<-abs(polls2008sub[,2]-polls2008sub[,3])
+lagtime<-rep(0,dim(polls2008sub)[1])
+electiondate2008<-c("Nov 04 2008")
+for (i in 1:dim(polls2008sub)[1])
+{
+ lagtime[i]<-as.Date(electiondate2008, format="%b %d %Y")-as.Date(as.character(polls2008sub[i,4]), format="%b %d %Y")
+}
+dataset2008<-cbind(Allresponses,as.character(polls2008sub[,1]),margins,lagtime,as.character(polls2008sub[,5]))
+
+
+stateslist<-unique(dataset2008[which(dataset2008[,1]=="0"),2])
+subdataset2008<-dataset2008[dataset2008[,2]%in%stateslist,]
+
+
+resp<-as.integer(subdataset2008[,1])
+statesFAC<-as.factor(subdataset2008[,2])
+margins<-as.double(subdataset2008[,3])
+lagtime<-as.double(subdataset2008[,4])
+pollersFAC<-as.factor(subdataset2008[,5])
+logitreg<-glm(resp~statesFAC+margins+lagtime+pollersFAC,family="binomial")
+summary(logitreg)
+
+unique(statesFAC)
+```
+
+
+

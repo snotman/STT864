@@ -1,0 +1,208 @@
+---
+title: "Stt864 Lab2"
+author: "Nan Cao"
+date: "February 23, 2016"
+output: pdf_document
+---
+  
+Q1(a)
+```{r}
+set.seed(52871775)
+setwd("C://Users//nan66//Google Drive//stt864//LAB2")
+flintlead<-read.csv(file="Flint-water-lead-dataset.csv",header=FALSE)
+colnames(flintlead)=c("SampleID","ZipCode","Ward", "0sec", "45sec", "120sec")
+table(flintlead[2])
+```  
+They are not evenly sampled.    
+Q1(b)
+```{r,fig.width = 6, fig.height = 4.2}
+hist(flintlead[,4])
+hist(flintlead[,5])
+hist(flintlead[,6])
+```  
+All three histograms have the shape of "L".  
+Q1(c)
+```{r,fig.width = 6, fig.height = 4.2}
+time<-c(0, 45, 120)
+matplot(time, t(flintlead[,4:6]),pch=18,type="o")
+```  
+There's an extreme value larger than 1000.  
+```{r}
+flintlead2<-flintlead[
+  (flintlead[,4]<100)&(flintlead[,5]<100)&(flintlead[,6]<100),]
+```  
+Q1(d)
+```{r,fig.width = 6, fig.height = 4.2}
+for(i in 48503:48507){
+	zipcode<-which(flintlead2[,2]==i)
+	matplot(time,t(flintlead2[zipcode,4:6]),type="o",ylab="levels",pch=18,
+	          add= (i!=48503),ylim=c(0,ceiling(max(flintlead2[,4:6]))))
+}
+```  
+There are some nonlinearity patterns  
+Q2
+```{r,fig.width = 6, fig.height = 4.2}
+Coef_Matr1<-matrix(0,5,2)
+Coef_Matr2<-matrix(0,5,3)
+Sigma_Matr<-matrix(0,5,2)
+for(i in 48503:48507){
+zipcode<-which(flintlead2[,2]==i)
+subsetflintlead<-flintlead2[zipcode,]
+responses1<-unlist(subsetflintlead[,4:6])
+sampletime1<-rep(time,each=dim(subsetflintlead)[1])
+plot(sampletime1, responses1)
+nlsreg1<-nls(responses1~theta1*exp(-sampletime1*theta2),
+             start=list(theta1=5,theta2=0.02))
+nlsreg2<-nls(responses1~theta1/(1+theta2*(exp(sampletime1*theta3))),
+             start=list(theta1=2,theta2=-0.7,theta3=-0.025))
+Coef_Matr1[i-48502,]<-coef(nlsreg1)
+Coef_Matr2[i-48502,]<-coef(nlsreg2)
+Sigma_Matr[i-48502,]<-c(summary(nlsreg1)$sigma,summary(nlsreg2)$sigma)
+print(summary(nlsreg1))
+print(summary(nlsreg2))
+}
+```  
+Q3  
+The leaf levels decrease over the flushing time.  
+$$H_0 : \mu_{120} = \mu_0 ; H_a : \mu_{120} \neq \mu_0 .$$  
+
+```{r}
+var(flintlead2[,4])
+var(flintlead2[,6])
+var.test(flintlead2[,4],flintlead2[,6])
+t.test(flintlead2[,4],flintlead2[,6],var.equal=FALSE,paired=F)
+```  
+Conclude $H_a : \mu_{120} \neq \mu_0$ ;It's an efficient way.  
+Q4
+```{r}
+Ftest_Mat2<-matrix(0,nrow=10,ncol=5)
+i<-1
+for(i1 in 48503:48506){
+	for (i2 in (i1+1):48507){
+		zipcode<-which(flintlead2[,2]==i1|flintlead2[,2]==i2)
+		subsetflintlead<-flintlead2[zipcode,]
+		subsetflintlead[,7]<-(subsetflintlead[,2]==i1)+0
+		ini1<-rep(subsetflintlead[,7],each=3)
+		responses1<-unlist(subsetflintlead[,4:6])
+		Log_res<-log(responses1)
+		sampletime1<-rep(time,each=dim(subsetflintlead)[1])*ini1
+		sampletime2<-rep(time,each=dim(subsetflintlead)[1])*(1-ini1)
+		reg2<-lm(Log_res~ini1+sampletime1+sampletime2)
+		f_stat<-summary(reg2)$fstatistic[1]
+		df1<-summary(reg2)$fstatistic[2]
+		df2<-summary(reg2)$fstatistic[3]
+		Ftest_Mat2[i,1]<-i1
+		Ftest_Mat2[i,2]<-i2
+		Ftest_Mat2[i,3]<-f_stat
+		Ftest_Mat2[i,4]<-qf(0.95,df1,df2)
+		Ftest_Mat2[i,5]<-(f_stat<=qf(0.95,df1,df2))
+		i<-i+1
+	}
+}
+Ftest_Mat2
+```  
+There's siginificant differences among areas different zip codes.  
+Q5
+```{r}
+for(i in 48503:48507){
+	time0<-0
+	theta1hat<-Coef_Matr1[i-48502,1]
+	theta2hat<-Coef_Matr1[i-48502,2]
+	meany<-theta1hat*exp(-time0*theta2hat)
+	sigmahat<-Sigma_Matr[i-48502,1]
+	y90quantile<-qnorm(0.9, meany, sigmahat)
+	print(i)
+	print(y90quantile)
+}
+```  
+Q6
+```{r}
+library(MASS)
+f<-function(theta1,theta2,x){
+	return(theta1*exp(-theta2*x))
+}
+Db_hat<-function(theta1,theta2,x){
+  D<-cbind(exp(-theta2*x),-x*theta1*exp(-theta2*x))
+  return(D)
+}
+G_hat<-function(theta1,theta2,x){
+  G<-matrix(c(exp(-theta2*x),-x*theta1*exp(-theta2*x)),nrow=1,ncol=2)
+  return(G)
+}
+CI<-function(para1,para2,sig,X,x0,alpha){
+  D<-Db_hat(para1,para2,X)
+  G<-G_hat(para1,para2,x0)
+  delta<-qnorm(1-0.5*alpha)*sig*sqrt(G%*%(ginv(t(D)%*%D))%*%t(G))
+  up<-f(para1,para2,x0)+delta
+  low<-f(para1,para2,x0)-delta
+  Interval<-c(low,up)
+  return(Interval)
+}
+for (i in 48503:48507){
+	theta1hat<-Coef_Matr1[i-48502,1]
+	theta2hat<-Coef_Matr1[i-48502,2]
+	sigmahat<-Sigma_Matr[i-48502,1]
+	zipcode<-which(flintlead2[,2]==i)
+	subsetflintlead<-flintlead2[zipcode,]
+	sampletime1<-rep(time,each=dim(subsetflintlead)[1])
+	CI_0<-CI(theta1hat,theta2hat,sigmahat,sampletime1,0,0.05)
+	CI_45<-CI(theta1hat,theta2hat,sigmahat,sampletime1,45,0.05)
+	CI_120<-CI(theta1hat,theta2hat,sigmahat,sampletime1,120,0.05)
+	print(i)
+	print(CI_0)
+	print(CI_45)
+	print(CI_120)
+
+}
+```  
+Q7
+```{r}
+flintlead3<-flintlead2[flintlead2[,2]!=48502,]
+flintlead3<-flintlead3[flintlead3[,2]!=48529,]
+flintlead3<-flintlead3[flintlead3[,2]!=48532,]
+resp_ALL<-unlist(flintlead3[,4:6])
+x48503<-rep(((flintlead3[,2]==48503)+0),3)
+x48504<-rep(((flintlead3[,2]==48504)+0),3)
+x48505<-rep(((flintlead3[,2]==48505)+0),3)
+x48506<-rep(((flintlead3[,2]==48506)+0),3)
+x48507<-rep(((flintlead3[,2]==48507)+0),3)
+stime<-rep(time,each=dim(flintlead3)[1])
+regzip<-nls(resp_ALL~b0*exp(-(
+	b1*x48503*stime+
+	b2*x48504*stime+
+	b3*x48505*stime+
+	b4*x48506*stime+
+	b5*x48507*stime)),
+	start=list(b0=4,b1=0.002,b2=0.001,b3=0.002,b4=-0.0002,b5=0))
+regzip
+```  
+Q8
+```{r}
+for(i in 48503:48507){
+	BootS_Times<-100
+	N<-nrow(flintlead2)
+	Num<-150
+	meany_Accumul<-0
+	sigma_Accumul<-0
+	for(step in 1:BootS_Times){
+		Sample_Num<-sample(1:N,Num,replace = FALSE)
+		Boot_Sample<-flintlead2[Sample_Num,]
+		time0<-0
+		zipcode_BS<-which(Boot_Sample[,2]==i)
+		subsetflintlead_BS<-Boot_Sample[zipcode_BS,]
+		responses_BS<-unlist(subsetflintlead_BS[,4:6])
+		sampletime_BS<-rep(time,each=dim(subsetflintlead_BS)[1])
+		nlsreg1_BS<-nls(responses_BS~theta1*exp(-sampletime_BS*theta2),
+             	start=list(theta1=5,theta2=0.02))
+		theta1hat_BS<-coef(nlsreg1_BS)[1]
+		theta2hat_BS<-coef(nlsreg1_BS)[2]
+		meany_BS<-theta1hat_BS*exp(-time0*theta2hat_BS)
+		sigmahat_BS<-summary(nlsreg1_BS)$sigma
+		meany_Accumul<-meany_Accumul+meany_BS
+		sigma_Accumul<-sigma_Accumul+sigmahat_BS^2
+	}
+	y90quantile_BS<-qnorm(0.9, (meany_Accumul/BootS_Times), sqrt(sigma_Accumul/BootS_Times))
+	print(i)
+	print(y90quantile_BS)
+}
+```
